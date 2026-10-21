@@ -1,0 +1,606 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#111827">
+  <title>Motion Recorder · 六轴动作采集</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #070b14;
+      --panel: rgba(18, 25, 41, .88);
+      --panel-2: #151e30;
+      --line: rgba(255,255,255,.1);
+      --text: #f5f7fb;
+      --muted: #9aa8bd;
+      --cyan: #5de4ff;
+      --violet: #a991ff;
+      --green: #53e39c;
+      --yellow: #ffd166;
+      --red: #ff6b7d;
+      --radius: 22px;
+      --shadow: 0 18px 60px rgba(0,0,0,.32);
+    }
+    * { box-sizing: border-box; }
+    html { background: var(--bg); }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font: 15px/1.45 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 90% 0%, rgba(91,63,194,.28), transparent 34rem),
+        radial-gradient(circle at 0% 22%, rgba(0,173,207,.18), transparent 28rem),
+        var(--bg);
+    }
+    button, input, select { font: inherit; }
+    button { touch-action: manipulation; }
+    .app { width: min(100%, 980px); margin: 0 auto; padding: max(20px, env(safe-area-inset-top)) 16px max(28px, env(safe-area-inset-bottom)); }
+    header { margin: 8px 2px 22px; }
+    .eyebrow { margin: 0 0 6px; color: var(--cyan); font-size: 12px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+    h1 { margin: 0; font-size: clamp(30px, 9vw, 52px); line-height: 1; letter-spacing: -.045em; }
+    .lede { max-width: 690px; margin: 14px 0 0; color: var(--muted); }
+    .privacy { display: inline-flex; gap: 8px; align-items: center; margin-top: 12px; color: #b9c5d6; font-size: 13px; }
+    .dot { width: 8px; height: 8px; border-radius: 99px; background: var(--green); box-shadow: 0 0 18px var(--green); }
+    .status-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+    .status-chip { min-width: 0; padding: 11px 12px; border: 1px solid var(--line); border-radius: 16px; background: rgba(255,255,255,.035); }
+    .status-chip small { display: block; color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
+    .status-chip strong { display: block; overflow: hidden; margin-top: 3px; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+    .ok { color: var(--green) !important; }
+    .warn { color: var(--yellow) !important; }
+    .bad { color: var(--red) !important; }
+    .layout { display: grid; gap: 14px; }
+    .card { padding: 18px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); box-shadow: var(--shadow); backdrop-filter: blur(16px); }
+    .card h2 { margin: 0 0 15px; font-size: 17px; letter-spacing: -.01em; }
+    .section-kicker { float: right; color: var(--muted); font-size: 12px; font-weight: 500; }
+    .segment { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .segment.two { grid-template-columns: repeat(2, 1fr); margin-top: 10px; }
+    .choice { position: relative; }
+    .choice input { position: absolute; opacity: 0; pointer-events: none; }
+    .choice span { display: grid; place-items: center; min-height: 55px; padding: 8px; border: 1px solid var(--line); border-radius: 15px; background: var(--panel-2); color: #c4ccda; font-weight: 750; text-align: center; cursor: pointer; transition: .18s ease; }
+    .choice input:checked + span { border-color: var(--cyan); color: white; background: linear-gradient(135deg, rgba(93,228,255,.18), rgba(169,145,255,.15)); box-shadow: inset 0 0 0 1px rgba(93,228,255,.22); }
+    .choice small { display: block; margin-top: 2px; color: var(--muted); font-size: 10px; font-weight: 500; }
+    .controls { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+    label.field { display: block; color: var(--muted); font-size: 12px; }
+    .field input { width: 100%; margin-top: 6px; padding: 12px; border: 1px solid var(--line); border-radius: 13px; outline: none; background: #0b1220; color: var(--text); }
+    .field input:focus { border-color: var(--cyan); }
+    .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; }
+    button { min-height: 48px; padding: 11px 14px; border: 1px solid var(--line); border-radius: 14px; color: var(--text); background: #172136; font-weight: 800; cursor: pointer; }
+    button.primary { border: 0; color: #07111b; background: linear-gradient(135deg, var(--cyan), #7ab7ff 55%, var(--violet)); }
+    button.danger { color: #ffc0c8; background: rgba(255,107,125,.09); }
+    button:disabled { cursor: not-allowed; opacity: .45; }
+    .hero-record { position: relative; display: grid; place-items: center; min-height: 210px; overflow: hidden; text-align: center; }
+    .hero-record::before { content: ""; position: absolute; width: 180px; height: 180px; border: 1px solid rgba(93,228,255,.18); border-radius: 50%; box-shadow: 0 0 0 28px rgba(93,228,255,.03), 0 0 0 58px rgba(169,145,255,.025); }
+    .record-content { position: relative; z-index: 1; }
+    .record-state { color: var(--muted); font-size: 12px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+    .record-value { margin: 3px 0 10px; font-size: 46px; font-weight: 850; line-height: 1; letter-spacing: -.04em; }
+    .pulse { animation: pulse 1s ease-in-out infinite alternate; color: var(--red); }
+    @keyframes pulse { to { transform: scale(1.04); filter: drop-shadow(0 0 14px rgba(255,107,125,.7)); } }
+    .record-meta { color: var(--muted); font-size: 12px; }
+    .notice { margin: 12px 0 0; padding: 12px 13px; border-left: 3px solid var(--yellow); border-radius: 10px; background: rgba(255,209,102,.07); color: #e8d8aa; font-size: 12px; }
+    .notice[hidden] { display: none; }
+    canvas { width: 100%; height: 150px; border-radius: 14px; background: #09101d; }
+    .legend { display: flex; gap: 14px; margin-top: 8px; color: var(--muted); font-size: 11px; }
+    .legend i { display: inline-block; width: 8px; height: 8px; margin-right: 5px; border-radius: 50%; }
+    .record-list { display: grid; gap: 9px; max-height: 440px; overflow: auto; }
+    .record-item { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; padding: 12px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,.025); }
+    .record-item strong { display: block; font-size: 13px; }
+    .record-item small { display: block; margin-top: 3px; color: var(--muted); }
+    .quality { display: inline-flex; align-items: center; gap: 5px; margin-left: 5px; font-size: 10px; text-transform: uppercase; }
+    .quality::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+    .icon-btn { min-height: 38px; padding: 7px 10px; color: #ffb2bc; background: transparent; }
+    .empty { padding: 26px 10px; color: var(--muted); text-align: center; }
+    .footer-actions { display: grid; grid-template-columns: 2fr 1fr; gap: 10px; margin-top: 12px; }
+    .summary { margin-bottom: 12px; color: var(--muted); font-size: 12px; }
+    .summary strong { color: white; }
+    .toast { position: fixed; z-index: 10; right: 16px; bottom: max(16px, env(safe-area-inset-bottom)); left: 16px; max-width: 520px; margin: auto; padding: 13px 16px; border: 1px solid var(--line); border-radius: 14px; background: #202a3d; box-shadow: var(--shadow); transform: translateY(130%); transition: transform .25s ease; }
+    .toast.show { transform: translateY(0); }
+    @media (min-width: 760px) {
+      .layout { grid-template-columns: 1fr 1fr; align-items: start; }
+      .span-2 { grid-column: span 2; }
+      .app { padding-inline: 24px; }
+      .toast { left: auto; width: 420px; }
+    }
+    @media (prefers-reduced-motion: reduce) { *, *::before { animation: none !important; transition: none !important; } }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header>
+      <p class="eyebrow">Motion Recorder / Dataset v1</p>
+      <h1>把动作录成数据</h1>
+      <p class="lede">在手机上采集 DeviceMotion 六轴原始数据。先授权，再按动作录制正样本和负样本；数据只保存在当前页面，直到你主动导出 JSON。</p>
+      <span class="privacy"><i class="dot"></i> 本地处理 · 不上传 · 不含预设假数据</span>
+    </header>
+
+    <section class="status-grid" aria-label="环境状态">
+      <div class="status-chip"><small>连接</small><strong id="secureStatus">检查中</strong></div>
+      <div class="status-chip"><small>传感器</small><strong id="sensorStatus">检查中</strong></div>
+      <div class="status-chip"><small>权限</small><strong id="permissionStatus">未请求</strong></div>
+    </section>
+
+    <div class="layout">
+      <section class="card">
+        <h2>1 · 标签 <span class="section-kicker">每段录制都会保存</span></h2>
+        <div class="segment" role="radiogroup" aria-label="动作类型">
+          <label class="choice"><input type="radio" name="action" value="footsteps" checked><span>👣<small>footsteps</small></span></label>
+          <label class="choice"><input type="radio" name="action" value="magic_wand"><span>🪄<small>magic_wand</small></span></label>
+          <label class="choice"><input type="radio" name="action" value="blaster"><span>⚡<small>blaster</small></span></label>
+        </div>
+        <div class="segment two" role="radiogroup" aria-label="样本类型">
+          <label class="choice"><input type="radio" name="polarity" value="positive" checked><span>正样本<small>做目标动作</small></span></label>
+          <label class="choice"><input type="radio" name="polarity" value="negative"><span>负样本<small>做相似但非目标动作</small></span></label>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>2 · 录制设置 <span class="section-kicker">建议 1–2 秒</span></h2>
+        <div class="controls">
+          <label class="field">准备倒计时（秒）<input id="prepSeconds" type="number" min="0" max="10" step="1" value="3" inputmode="numeric"></label>
+          <label class="field">每段时长（秒）<input id="durationSeconds" type="number" min="0.5" max="5" step="0.1" value="1.5" inputmode="decimal"></label>
+          <label class="field">批量次数<input id="batchCount" type="number" min="1" max="30" step="1" value="5" inputmode="numeric"></label>
+          <label class="field">段间休息（秒）<input id="restSeconds" type="number" min="0" max="10" step="0.5" value="2" inputmode="decimal"></label>
+        </div>
+        <div class="actions">
+          <button id="permissionButton">启用传感器</button>
+          <button id="recordButton" class="primary" disabled>录制 1 段</button>
+          <button id="batchButton" class="primary" disabled>批量录制</button>
+          <button id="stopButton" class="danger" disabled>停止</button>
+        </div>
+        <p id="environmentNotice" class="notice" hidden></p>
+      </section>
+
+      <section class="card hero-record">
+        <div class="record-content">
+          <div id="recordState" class="record-state">等待授权</div>
+          <div id="recordValue" class="record-value">—</div>
+          <div id="recordMeta" class="record-meta">请在 HTTPS 手机页面中点击“启用传感器”</div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>最近一段预览 <span id="previewTitle" class="section-kicker">暂无数据</span></h2>
+        <canvas id="chart" width="720" height="300" aria-label="最近一段传感器波形"></canvas>
+        <div class="legend"><span><i style="background:#5de4ff"></i>加速度模长</span><span><i style="background:#a991ff"></i>旋转模长</span></div>
+        <p id="qualityDetail" class="notice">录制完成后，这里会显示采样率、缺失轴和时间间隔检查。</p>
+      </section>
+
+      <section class="card span-2">
+        <h2>3 · 数据集 <span class="section-kicker">刷新前请导出</span></h2>
+        <div id="datasetSummary" class="summary">共 <strong>0</strong> 段</div>
+        <div id="recordList" class="record-list"><div class="empty">还没有录制。建议每个动作先录 10–20 个正样本，再录覆盖常见误触的负样本。</div></div>
+        <div class="footer-actions">
+          <button id="exportButton" class="primary" disabled>导出版本化 JSON</button>
+          <button id="clearButton" class="danger" disabled>清空全部</button>
+        </div>
+      </section>
+    </div>
+  </main>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    /* MOTION_RECORDER_CORE_START */
+    (() => {
+      const finiteOrNull = (value) => Number.isFinite(Number(value)) ? Number(value) : null;
+      const round = (value, digits = 3) => Number.isFinite(value) ? Number(value.toFixed(digits)) : null;
+
+      function toUnixMs(eventTimeStamp, now = Date.now(), timeOrigin = performance.timeOrigin) {
+        if (!Number.isFinite(eventTimeStamp)) return now;
+        if (eventTimeStamp > 1e12) return eventTimeStamp;
+        return timeOrigin + eventTimeStamp;
+      }
+
+      function summarizeSamples(samples, targetDurationMs) {
+        if (!Array.isArray(samples) || samples.length === 0) {
+          return { sampleCount: 0, effectiveHz: 0, meanIntervalMs: null, intervalJitterMs: null, missingAxisRatio: 1, monotonic: true, actualDurationMs: 0, quality: 'bad', issues: [{ code: 'no_samples', message: '没有收到传感器样本' }] };
+        }
+        const times = samples.map((sample) => finiteOrNull(sample.relativeMs)).filter((value) => value !== null);
+        const intervals = [];
+        let monotonic = true;
+        for (let i = 1; i < times.length; i += 1) {
+          const delta = times[i] - times[i - 1];
+          if (delta <= 0) monotonic = false;
+          if (delta > 0) intervals.push(delta);
+        }
+        const actualDurationMs = times.length > 1 ? Math.max(0, times[times.length - 1] - times[0]) : 0;
+        const meanIntervalMs = intervals.length ? intervals.reduce((sum, value) => sum + value, 0) / intervals.length : null;
+        const variance = meanIntervalMs === null ? null : intervals.reduce((sum, value) => sum + ((value - meanIntervalMs) ** 2), 0) / intervals.length;
+        const jitter = variance === null ? null : Math.sqrt(variance);
+        const effectiveHz = actualDurationMs > 0 ? ((samples.length - 1) / actualDurationMs) * 1000 : 0;
+        let missing = 0;
+        const expected = samples.length * 6;
+        for (const sample of samples) {
+          const axes = [sample.acceleration?.x, sample.acceleration?.y, sample.acceleration?.z, sample.rotationRate?.alpha, sample.rotationRate?.beta, sample.rotationRate?.gamma];
+          missing += axes.filter((value) => !Number.isFinite(value)).length;
+        }
+        const missingAxisRatio = expected ? missing / expected : 1;
+        const issues = [];
+        if (effectiveHz < 30) issues.push({ code: 'low_sample_rate', message: `实测采样率偏低（${round(effectiveHz, 1)} Hz）` });
+        if (missingAxisRatio > 0.1) issues.push({ code: 'missing_axes', message: `六轴缺失比例较高（${round(missingAxisRatio * 100, 1)}%）` });
+        if (!monotonic) issues.push({ code: 'non_monotonic_time', message: '样本时间戳不是严格递增' });
+        if (meanIntervalMs && jitter / meanIntervalMs > 0.5) issues.push({ code: 'high_jitter', message: `采样间隔抖动较大（σ ${round(jitter, 1)} ms）` });
+        if (targetDurationMs && actualDurationMs < targetDurationMs * 0.7) issues.push({ code: 'short_capture', message: '实际采集时长明显短于设定值' });
+        const critical = issues.some((issue) => ['missing_axes', 'non_monotonic_time', 'short_capture'].includes(issue.code));
+        return {
+          sampleCount: samples.length,
+          effectiveHz: round(effectiveHz, 2),
+          meanIntervalMs: round(meanIntervalMs, 3),
+          intervalJitterMs: round(jitter, 3),
+          missingAxisRatio: round(missingAxisRatio, 4),
+          monotonic,
+          actualDurationMs: round(actualDurationMs, 3),
+          quality: critical ? 'bad' : issues.length ? 'warning' : 'good',
+          issues,
+        };
+      }
+
+      function deviceMetadata() {
+        return {
+          userAgent: navigator.userAgent || null,
+          platform: navigator.userAgentData?.platform || navigator.platform || null,
+          language: navigator.language || null,
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || null,
+          screen: { width: screen.width || null, height: screen.height || null, pixelDepth: screen.pixelDepth || null },
+        };
+      }
+
+      function buildExport(state) {
+        return {
+          schemaVersion: 'motion-recorder.dataset.v1',
+          exportedAt: new Date().toISOString(),
+          dataset: {
+            id: state.datasetId,
+            createdAt: state.createdAt,
+            recordingCount: state.recordings.length,
+            labels: { actions: ['footsteps', 'magic_wand', 'blaster'], polarities: ['positive', 'negative'] },
+          },
+          capture: {
+            sensor: 'DeviceMotionEvent',
+            primaryAxes: ['acceleration.x', 'acceleration.y', 'acceleration.z', 'rotationRate.alpha', 'rotationRate.beta', 'rotationRate.gamma'],
+            additionalAxes: ['accelerationIncludingGravity.x', 'accelerationIncludingGravity.y', 'accelerationIncludingGravity.z'],
+            timestampFields: ['capturedAtUnixMs', 'receivedAtUnixMs', 'relativeMs'],
+            permissionState: state.permissionState,
+            defaultConfig: { ...state.config },
+          },
+          exportDevice: deviceMetadata(),
+          recordings: state.recordings,
+        };
+      }
+
+      window.MotionRecorderCore = { finiteOrNull, toUnixMs, summarizeSamples, deviceMetadata, buildExport };
+    })();
+    /* MOTION_RECORDER_CORE_END */
+
+    (() => {
+      const core = window.MotionRecorderCore;
+      const $ = (selector) => document.querySelector(selector);
+      const $$ = (selector) => Array.from(document.querySelectorAll(selector));
+      const state = {
+        datasetId: `motion-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        createdAt: new Date().toISOString(),
+        permissionState: 'not-requested',
+        recordings: [],
+        config: {},
+        sensorReady: false,
+        busy: false,
+        stopping: false,
+        activeSamples: null,
+        activeStartedUnixMs: null,
+      };
+
+      const els = {
+        secure: $('#secureStatus'), sensor: $('#sensorStatus'), permission: $('#permissionStatus'), notice: $('#environmentNotice'),
+        permissionButton: $('#permissionButton'), recordButton: $('#recordButton'), batchButton: $('#batchButton'), stopButton: $('#stopButton'),
+        prep: $('#prepSeconds'), duration: $('#durationSeconds'), batch: $('#batchCount'), rest: $('#restSeconds'),
+        recordState: $('#recordState'), recordValue: $('#recordValue'), recordMeta: $('#recordMeta'), previewTitle: $('#previewTitle'),
+        chart: $('#chart'), qualityDetail: $('#qualityDetail'), list: $('#recordList'), summary: $('#datasetSummary'),
+        exportButton: $('#exportButton'), clearButton: $('#clearButton'), toast: $('#toast'),
+      };
+
+      const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+      const clamp = (value, min, max) => Math.min(max, Math.max(min, Number(value)));
+      const selected = (name) => document.querySelector(`input[name="${name}"]:checked`).value;
+      const showToast = (message) => {
+        els.toast.textContent = message;
+        els.toast.classList.add('show');
+        clearTimeout(showToast.timer);
+        showToast.timer = setTimeout(() => els.toast.classList.remove('show'), 2600);
+      };
+
+      function readConfig() {
+        const config = {
+          prepSeconds: clamp(els.prep.value, 0, 10),
+          durationMs: clamp(els.duration.value, .5, 5) * 1000,
+          batchCount: Math.round(clamp(els.batch.value, 1, 30)),
+          restSeconds: clamp(els.rest.value, 0, 10),
+        };
+        els.prep.value = config.prepSeconds;
+        els.duration.value = config.durationMs / 1000;
+        els.batch.value = config.batchCount;
+        els.rest.value = config.restSeconds;
+        state.config = config;
+        return config;
+      }
+
+      function setStatus(element, text, className) {
+        element.textContent = text;
+        element.className = className || '';
+      }
+
+      function setBusy(busy) {
+        state.busy = busy;
+        els.recordButton.disabled = busy || !state.sensorReady;
+        els.batchButton.disabled = busy || !state.sensorReady;
+        els.permissionButton.disabled = busy;
+        els.stopButton.disabled = !busy;
+        $$('input').forEach((input) => { input.disabled = busy; });
+      }
+
+      function setHero(stage, value, meta, recording = false) {
+        els.recordState.textContent = stage;
+        els.recordValue.textContent = value;
+        els.recordValue.classList.toggle('pulse', recording);
+        els.recordMeta.textContent = meta;
+      }
+
+      function checkEnvironment() {
+        const locallyTrusted = ['localhost', '127.0.0.1'].includes(location.hostname);
+        const secure = window.isSecureContext || locallyTrusted;
+        setStatus(els.secure, secure ? 'HTTPS ✓' : '需要 HTTPS', secure ? 'ok' : 'bad');
+        const supported = 'DeviceMotionEvent' in window;
+        setStatus(els.sensor, supported ? 'API 可用' : '不支持', supported ? 'ok' : 'bad');
+        if (!secure || !supported) {
+          const reasons = [];
+          if (!secure) reasons.push('请通过 HTTPS 打开；手机浏览器通常会屏蔽 HTTP 页面上的运动传感器。');
+          if (!supported) reasons.push('当前浏览器未提供 DeviceMotion API，请换用手机 Safari 或 Chrome。');
+          els.notice.textContent = reasons.join(' ');
+          els.notice.hidden = false;
+          els.permissionButton.disabled = true;
+          return false;
+        }
+        return true;
+      }
+
+      async function requestPermission() {
+        if (!checkEnvironment()) return;
+        try {
+          let result = 'granted';
+          if (typeof DeviceMotionEvent.requestPermission === 'function') {
+            result = await DeviceMotionEvent.requestPermission();
+          }
+          state.permissionState = result;
+          if (result !== 'granted') throw new Error('用户未授予运动与方向访问权限');
+          state.sensorReady = true;
+          setStatus(els.permission, '已授权', 'ok');
+          els.notice.hidden = true;
+          els.permissionButton.textContent = '传感器已启用';
+          els.permissionButton.disabled = true;
+          els.recordButton.disabled = false;
+          els.batchButton.disabled = false;
+          setHero('准备就绪', 'Ready', '固定手机佩戴/握持方式，再开始录制');
+          showToast('传感器权限已启用');
+        } catch (error) {
+          state.permissionState = 'denied';
+          state.sensorReady = false;
+          setStatus(els.permission, '未授权', 'bad');
+          els.notice.textContent = `${error.message || '无法启用传感器'}。iPhone 可在 Safari 网站设置中重新允许“运动与方向访问”。`;
+          els.notice.hidden = false;
+        }
+      }
+
+      function axis(value) { return core.finiteOrNull(value); }
+
+      function onMotion(event) {
+        if (!state.activeSamples) return;
+        const receivedAtUnixMs = Date.now();
+        const capturedAtUnixMs = core.toUnixMs(event.timeStamp, receivedAtUnixMs, performance.timeOrigin);
+        state.activeSamples.push({
+          capturedAtUnixMs,
+          receivedAtUnixMs,
+          relativeMs: Number((capturedAtUnixMs - state.activeStartedUnixMs).toFixed(3)),
+          eventIntervalMs: axis(event.interval),
+          acceleration: { x: axis(event.acceleration?.x), y: axis(event.acceleration?.y), z: axis(event.acceleration?.z) },
+          accelerationIncludingGravity: { x: axis(event.accelerationIncludingGravity?.x), y: axis(event.accelerationIncludingGravity?.y), z: axis(event.accelerationIncludingGravity?.z) },
+          rotationRate: { alpha: axis(event.rotationRate?.alpha), beta: axis(event.rotationRate?.beta), gamma: axis(event.rotationRate?.gamma) },
+          screenOrientationDegrees: axis(screen.orientation?.angle ?? window.orientation),
+        });
+      }
+
+      async function countdown(seconds, label) {
+        const end = performance.now() + seconds * 1000;
+        while (!state.stopping && performance.now() < end) {
+          const remaining = Math.max(0, Math.ceil((end - performance.now()) / 1000));
+          setHero(label, remaining || 'GO', '保持准备姿势，倒计时结束后完成一次动作');
+          await wait(100);
+        }
+      }
+
+      async function captureOne(sequenceIndex, sequenceTotal) {
+        const config = readConfig();
+        await countdown(config.prepSeconds, '准备');
+        if (state.stopping) return null;
+        const action = selected('action');
+        const polarity = selected('polarity');
+        const startedAt = new Date();
+        state.activeSamples = [];
+        state.activeStartedUnixMs = Date.now();
+        window.addEventListener('devicemotion', onMotion);
+        setHero('录制中', `${(config.durationMs / 1000).toFixed(1)}s`, `${action} · ${polarity} · ${sequenceIndex}/${sequenceTotal}`, true);
+        const tickStart = performance.now();
+        while (!state.stopping && performance.now() - tickStart < config.durationMs) {
+          const left = Math.max(0, config.durationMs - (performance.now() - tickStart));
+          els.recordValue.textContent = `${(left / 1000).toFixed(1)}s`;
+          await wait(50);
+        }
+        window.removeEventListener('devicemotion', onMotion);
+        const samples = state.activeSamples;
+        state.activeSamples = null;
+        if (state.stopping) return null;
+        const quality = core.summarizeSamples(samples, config.durationMs);
+        const recording = {
+          id: `rec-${startedAt.getTime()}-${Math.random().toString(36).slice(2, 7)}`,
+          label: { action, polarity },
+          sequence: { index: sequenceIndex, total: sequenceTotal },
+          startedAt: startedAt.toISOString(),
+          endedAt: new Date().toISOString(),
+          targetDurationMs: config.durationMs,
+          permissionState: state.permissionState,
+          device: core.deviceMetadata(),
+          sampling: quality,
+          samples,
+        };
+        state.recordings.push(recording);
+        renderAll();
+        return recording;
+      }
+
+      async function runCapture(total) {
+        if (state.busy || !state.sensorReady) return;
+        setBusy(true);
+        state.stopping = false;
+        try {
+          for (let index = 1; index <= total; index += 1) {
+            const recording = await captureOne(index, total);
+            if (!recording || state.stopping) break;
+            if (index < total) {
+              await countdown(readConfig().restSeconds, `休息 · 下一段 ${index + 1}/${total}`);
+            }
+          }
+        } finally {
+          window.removeEventListener('devicemotion', onMotion);
+          state.activeSamples = null;
+          const stopped = state.stopping;
+          state.stopping = false;
+          setBusy(false);
+          setHero(stopped ? '已停止' : '完成', state.recordings.length, `当前数据集共 ${state.recordings.length} 段`);
+        }
+      }
+
+      function stopCapture() {
+        state.stopping = true;
+        window.removeEventListener('devicemotion', onMotion);
+        state.activeSamples = null;
+        els.stopButton.disabled = true;
+      }
+
+      function magnitude(vector, keys) {
+        const values = keys.map((key) => vector?.[key]).filter(Number.isFinite);
+        return values.length === keys.length ? Math.sqrt(values.reduce((sum, value) => sum + value * value, 0)) : null;
+      }
+
+      function drawChart(recording) {
+        const canvas = els.chart;
+        const ctx = canvas.getContext('2d');
+        const { width, height } = canvas;
+        ctx.clearRect(0, 0, width, height);
+        ctx.fillStyle = '#09101d';
+        ctx.fillRect(0, 0, width, height);
+        ctx.strokeStyle = 'rgba(255,255,255,.07)';
+        ctx.lineWidth = 1;
+        for (let i = 1; i < 5; i += 1) {
+          ctx.beginPath(); ctx.moveTo(0, height * i / 5); ctx.lineTo(width, height * i / 5); ctx.stroke();
+        }
+        if (!recording?.samples?.length) return;
+        const series = [
+          { color: '#5de4ff', values: recording.samples.map((s) => magnitude(s.accelerationIncludingGravity, ['x','y','z']) ?? magnitude(s.acceleration, ['x','y','z'])) },
+          { color: '#a991ff', values: recording.samples.map((s) => magnitude(s.rotationRate, ['alpha','beta','gamma'])) },
+        ];
+        for (const item of series) {
+          const valid = item.values.filter(Number.isFinite);
+          if (valid.length < 2) continue;
+          const max = Math.max(...valid, 1);
+          ctx.beginPath(); ctx.lineWidth = 3; ctx.lineJoin = 'round'; ctx.strokeStyle = item.color;
+          item.values.forEach((value, index) => {
+            if (!Number.isFinite(value)) return;
+            const x = (index / Math.max(1, item.values.length - 1)) * width;
+            const y = height - 18 - (value / max) * (height - 36);
+            if (index === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+          });
+          ctx.stroke();
+        }
+      }
+
+      function qualityLabel(quality) {
+        if (quality === 'good') return '良好';
+        if (quality === 'warning') return '留意';
+        return '需重录';
+      }
+
+      function renderAll() {
+        const counts = state.recordings.reduce((acc, rec) => {
+          const key = `${rec.label.action}/${rec.label.polarity}`;
+          acc[key] = (acc[key] || 0) + 1;
+          return acc;
+        }, {});
+        const split = Object.entries(counts).map(([key, count]) => `${key} ${count}`).join(' · ');
+        els.summary.innerHTML = `共 <strong>${state.recordings.length}</strong> 段${split ? ` · ${split}` : ''}`;
+        if (!state.recordings.length) {
+          els.list.innerHTML = '<div class="empty">还没有录制。建议每个动作先录 10–20 个正样本，再录覆盖常见误触的负样本。</div>';
+          els.previewTitle.textContent = '暂无数据';
+          els.qualityDetail.textContent = '录制完成后，这里会显示采样率、缺失轴和时间间隔检查。';
+          drawChart(null);
+        } else {
+          els.list.innerHTML = state.recordings.map((rec, index) => {
+            const q = rec.sampling;
+            return `<article class="record-item"><div><strong>#${index + 1} · ${rec.label.action} / ${rec.label.polarity}<span class="quality ${q.quality}">${qualityLabel(q.quality)}</span></strong><small>${q.sampleCount} 点 · ${q.effectiveHz} Hz · ${new Date(rec.startedAt).toLocaleTimeString()}</small></div><button class="icon-btn" data-delete="${rec.id}" aria-label="删除第 ${index + 1} 段">删除</button></article>`;
+          }).join('');
+          const latest = state.recordings[state.recordings.length - 1];
+          els.previewTitle.textContent = `${latest.label.action} / ${latest.label.polarity}`;
+          const q = latest.sampling;
+          els.qualityDetail.textContent = q.issues.length ? q.issues.map((issue) => issue.message).join('；') : `质量良好：${q.sampleCount} 点，${q.effectiveHz} Hz，间隔抖动 σ ${q.intervalJitterMs ?? 0} ms。`;
+          els.qualityDetail.style.borderLeftColor = q.quality === 'good' ? 'var(--green)' : q.quality === 'warning' ? 'var(--yellow)' : 'var(--red)';
+          drawChart(latest);
+        }
+        els.exportButton.disabled = !state.recordings.length || state.busy;
+        els.clearButton.disabled = !state.recordings.length || state.busy;
+      }
+
+      function deleteRecording(id) {
+        state.recordings = state.recordings.filter((recording) => recording.id !== id);
+        renderAll();
+      }
+
+      function exportJson() {
+        readConfig();
+        const payload = core.buildExport(state);
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+        link.href = url;
+        link.download = `motion-dataset-${stamp}.json`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+        showToast(`已导出 ${state.recordings.length} 段原始数据`);
+      }
+
+      els.permissionButton.addEventListener('click', requestPermission);
+      els.recordButton.addEventListener('click', () => runCapture(1));
+      els.batchButton.addEventListener('click', () => runCapture(readConfig().batchCount));
+      els.stopButton.addEventListener('click', stopCapture);
+      els.exportButton.addEventListener('click', exportJson);
+      els.clearButton.addEventListener('click', () => {
+        if (confirm(`确定清空 ${state.recordings.length} 段尚未导出的数据吗？`)) {
+          state.recordings = [];
+          state.datasetId = `motion-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+          state.createdAt = new Date().toISOString();
+          renderAll();
+        }
+      });
+      els.list.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-delete]');
+        if (button && confirm('删除这一段录制？')) deleteRecording(button.dataset.delete);
+      });
+      window.addEventListener('resize', () => drawChart(state.recordings[state.recordings.length - 1]));
+
+      readConfig();
+      checkEnvironment();
+      renderAll();
+    })();
+  </script>
+</body>
+</html>
+
