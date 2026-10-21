@@ -235,6 +235,18 @@
         };
       }
 
+      function deriveControlState({ busy, sensorReady, recordingCount }) {
+        const hasRecordings = recordingCount > 0;
+        return {
+          recordDisabled: busy || !sensorReady,
+          batchDisabled: busy || !sensorReady,
+          permissionDisabled: busy || sensorReady,
+          stopDisabled: !busy,
+          exportDisabled: busy || !hasRecordings,
+          clearDisabled: busy || !hasRecordings,
+        };
+      }
+
       function deviceMetadata() {
         return {
           userAgent: navigator.userAgent || null,
@@ -268,7 +280,7 @@
         };
       }
 
-      window.MotionRecorderCore = { finiteOrNull, toUnixMs, summarizeSamples, deviceMetadata, buildExport };
+      window.MotionRecorderCore = { finiteOrNull, toUnixMs, summarizeSamples, deriveControlState, deviceMetadata, buildExport };
     })();
     /* MOTION_RECORDER_CORE_END */
 
@@ -330,10 +342,13 @@
 
       function setBusy(busy) {
         state.busy = busy;
-        els.recordButton.disabled = busy || !state.sensorReady;
-        els.batchButton.disabled = busy || !state.sensorReady;
-        els.permissionButton.disabled = busy;
-        els.stopButton.disabled = !busy;
+        const controls = core.deriveControlState({ busy, sensorReady: state.sensorReady, recordingCount: state.recordings.length });
+        els.recordButton.disabled = controls.recordDisabled;
+        els.batchButton.disabled = controls.batchDisabled;
+        els.permissionButton.disabled = controls.permissionDisabled;
+        els.stopButton.disabled = controls.stopDisabled;
+        els.exportButton.disabled = controls.exportDisabled;
+        els.clearButton.disabled = controls.clearDisabled;
         $$('input').forEach((input) => { input.disabled = busy; });
       }
 
@@ -552,8 +567,9 @@
           els.qualityDetail.style.borderLeftColor = q.quality === 'good' ? 'var(--green)' : q.quality === 'warning' ? 'var(--yellow)' : 'var(--red)';
           drawChart(latest);
         }
-        els.exportButton.disabled = !state.recordings.length || state.busy;
-        els.clearButton.disabled = !state.recordings.length || state.busy;
+        const controls = core.deriveControlState({ busy: state.busy, sensorReady: state.sensorReady, recordingCount: state.recordings.length });
+        els.exportButton.disabled = controls.exportDisabled;
+        els.clearButton.disabled = controls.clearDisabled;
       }
 
       function deleteRecording(id) {
